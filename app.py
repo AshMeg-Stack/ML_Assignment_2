@@ -6,7 +6,7 @@ import joblib
 st.title("Heart Disease Prediction - ML Assignment 2")
 
 metrics_path = "artifacts/metrics_table.csv"
-models_dir = "artifacts/models"
+models_dir = "model/saved_models"
 cm_dir = "artifacts/confusion_matrices"
 report_dir = "artifacts/reports"
 test_csv_path = "data/test_data.csv"
