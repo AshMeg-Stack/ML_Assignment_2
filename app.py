@@ -7,6 +7,8 @@ st.title("Heart Disease Prediction - ML Assignment 2")
 
 metrics_path = "artifacts/metrics_table.csv"
 models_dir = "artifacts/models"
+cm_dir = "artifacts/confusion_matrices"
+report_dir = "artifacts/reports"
 test_csv_path = "data/test_data.csv"
 
 if os.path.exists(metrics_path):
@@ -25,6 +27,20 @@ model_files = [f for f in os.listdir(models_dir) if f.endswith(".pkl")]
 model_names = [f.replace(".pkl", "") for f in model_files]
 model_name = st.selectbox("Select Model", model_names)
 
+# Show confusion matrix
+cm_path = f"{cm_dir}/confusion_matrix_{model_name}.csv"
+if os.path.exists(cm_path):
+    st.subheader("Confusion Matrix")
+    cm_df = pd.read_csv(cm_path)
+    st.dataframe(cm_df)
+
+# Show classification report
+report_path = f"{report_dir}/classification_report_{model_name}.txt"
+if os.path.exists(report_path):
+    st.subheader("Classification Report")
+    with open(report_path, "r") as f:
+        st.text(f.read())
+
 uploaded = st.file_uploader("Upload test CSV (features only)", type=["csv"])
 
 if uploaded is not None:
@@ -37,8 +53,7 @@ if uploaded is not None:
     X = scaler.transform(df)
     preds = model.predict(X)
 
-    out = df.copy()
-    out["prediction"] = preds
+    df["prediction"] = preds
 
     st.subheader("Predictions")
-    st.dataframe(out)
+    st.dataframe(df)

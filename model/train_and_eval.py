@@ -13,19 +13,11 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
-
-try:
-    from xgboost import XGBClassifier
-    XGB_OK = True
-except:
-    XGB_OK = False
+from xgboost import XGBClassifier
 
 
 def main():
     df = pd.read_csv("data/heart.csv")
-
-    if "target" not in df.columns:
-        raise ValueError("heart.csv must have a column named 'target'")
 
     X = df.drop(columns=["target"])
     y = df["target"]
@@ -34,8 +26,9 @@ def main():
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    os.makedirs("artifacts", exist_ok=True)
     os.makedirs("artifacts/models", exist_ok=True)
+    os.makedirs("artifacts/confusion_matrices", exist_ok=True)
+    os.makedirs("artifacts/reports", exist_ok=True)
 
     X_test.to_csv("data/test_data.csv", index=False)
 
@@ -49,43 +42,22 @@ def main():
         ("KNN", KNeighborsClassifier(n_neighbors=7)),
         ("NaiveBayes", GaussianNB()),
         ("RandomForest", RandomForestClassifier(n_estimators=300, random_state=42)),
+        ("XGBoost", XGBClassifier(eval_metric="logloss", random_state=42))
     ]
 
-    if XGB_OK:
-        models.append((
-            "XGBoost",
-            XGBClassifier(
-                n_estimators=400,
-                max_depth=4,
-                learning_rate=0.05,
-                subsample=0.9,
-                colsample_bytree=0.9,
-                random_state=42,
-                eval_metric="logloss"
-            )
-        ))
-    else:
-        print("XGBoost not available. Install using: pip install xgboost")
-
     rows = []
-    best_name = None
-    best_f1 = -1
-    best_bundle = None
 
     for name, model in models:
         model.fit(X_train_s, y_train)
         y_pred = model.predict(X_test_s)
 
-        if hasattr(model, "predict_proba"):
-            y_prob = model.predict_proba(X_test_s)[:, 1]
-            auc = roc_auc_score(y_test, y_prob)
-        else:
-            auc = float("nan")
+        y_prob = model.predict_proba(X_test_s)[:, 1]
+        auc = roc_auc_score(y_test, y_prob)
 
         acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, zero_division=0)
-        rec = recall_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
+        prec = precision_score(y_test, y_pred)
+        rec = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
         mcc = matthews_corrcoef(y_test, y_pred)
 
         rows.append({
@@ -98,35 +70,21 @@ def main():
             "MCC": mcc
         })
 
-        print("\n==============================")
-        print("Model:", name)
-        print("Accuracy:", round(acc, 4))
-        print("AUC:", round(auc, 4) if not np.isnan(auc) else "nan")
-        print("Precision:", round(prec, 4))
-        print("Recall:", round(rec, 4))
-        print("F1:", round(f1, 4))
-        print("MCC:", round(mcc, 4))
-        print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
-        print("Classification Report:\n", classification_report(y_test, y_pred, zero_division=0))
+        cm = confusion_matrix(y_test, y_pred)
+        rep = classification_report(y_test, y_pred)
 
-        joblib.dump({"scaler": scaler, "model": model}, f"artifacts/models/{name}.pkl")
+        pd.DataFrame(cm).to_csv(
+            f"artifacts/confusion_matrices/confusion_matrix_{name}.csv",
+            index=False
+        )
 
-        if f1 > best_f1:
-            best_f1 = f1
-            best_name = name
-            best_bundle = {"scaler": scaler, "model": model}
+        with open(f"artifacts/reports/classification_report_{name}.txt", "w") as f:
+            f.write(rep)
 
-    metrics_df = pd.DataFrame(rows)
-    metrics_df.to_csv("artifacts/metrics_table.csv", index=False)
+        joblib.dump({"scaler": scaler, "model": model},
+                    f"artifacts/models/{name}.pkl")
 
-    joblib.dump(best_bundle, "artifacts/best_model.pkl")
-
-    print("\nSaved:")
-    print("data/test_data.csv")
-    print("artifacts/metrics_table.csv")
-    print("artifacts/best_model.pkl")
-    print("artifacts/models/*.pkl")
-    print("Best model:", best_name, "F1:", round(best_f1, 4))
+    pd.DataFrame(rows).to_csv("artifacts/metrics_table.csv", index=False)
 
 
 if __name__ == "__main__":
